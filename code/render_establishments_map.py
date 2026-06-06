@@ -69,7 +69,16 @@ def render_map(
     hidden_count = len(df) - len(display_df)
     with_url = display_df[display_df["has_url"]]
     without_url = display_df[~display_df["has_url"]]
-    highlighted = display_df[display_df["osm_id"] == highlight_osm_id]
+    if highlight_osm_id is None:
+        highlighted = display_df.iloc[0:0]
+    else:
+        highlighted = display_df[
+            display_df["osm_id"].astype(str) == str(highlight_osm_id)
+        ]
+        if highlighted.empty:
+            logger.warning("Highlight OSM ID %s is not visible in the map data", highlight_osm_id)
+        else:
+            logger.info("Highlighting OSM ID %s", highlight_osm_id)
     subtitle = f"{len(display_df):,} establishments shown from the OSM pull step"
     if hidden_count:
         subtitle = f"{subtitle}; {hidden_count:,} edge points hidden by display clipping"
