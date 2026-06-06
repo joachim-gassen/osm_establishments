@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
 import time
 from pathlib import Path
 from typing import Any
@@ -25,8 +24,6 @@ BBOX = (52.49, 13.35, 52.54, 13.43)
 OUTPUT_DIR = Path("data/pulled")
 CACHE_DIR = Path("data/cache/osm")
 OUTPUT_GEOJSON = OUTPUT_DIR / "business_places.geojson"
-REPULL_DATA = False
-TEARDOWN_CACHE_FOLDER = False
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
@@ -151,16 +148,6 @@ def load_or_query_raw_response(tag: str, query: str) -> dict[str, Any]:
     return raw
 
 
-def tear_down_cache_dir() -> None:
-    if CACHE_DIR.exists():
-        logger.info("Removing OSM pull cache directory %s", CACHE_DIR)
-        shutil.rmtree(CACHE_DIR)
-
-    cache_parent = CACHE_DIR.parent
-    if cache_parent.exists() and not any(cache_parent.iterdir()):
-        cache_parent.rmdir()
-
-
 def write_pretty_geojson(gdf: gpd.GeoDataFrame, path: Path) -> None:
     geojson = json.loads(gdf.to_json())
     path.write_text(
@@ -247,12 +234,6 @@ def build_geodataframe(records: list[dict[str, Any]]) -> gpd.GeoDataFrame:
 
 
 def run_pipeline() -> gpd.GeoDataFrame:
-    if OUTPUT_GEOJSON.exists() and not REPULL_DATA:
-        logger.info("Using existing OSM pull output %s", OUTPUT_GEOJSON)
-        if TEARDOWN_CACHE_FOLDER:
-            tear_down_cache_dir()
-        return gpd.read_file(OUTPUT_GEOJSON)
-
     all_records = []
 
     for tag in PLACE_TAGS:
@@ -268,8 +249,6 @@ def run_pipeline() -> gpd.GeoDataFrame:
 
     gdf = build_geodataframe(all_records)
     write_pretty_geojson(gdf, OUTPUT_GEOJSON)
-    if TEARDOWN_CACHE_FOLDER:
-        tear_down_cache_dir()
 
     return gdf
 

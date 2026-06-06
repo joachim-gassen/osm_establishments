@@ -5,6 +5,10 @@ WEB_EVIDENCE = data/pulled/legal_web_pages.json
 LEGAL_INFO = data/generated/osm_establishments_legal_info.csv
 MAP_PNG = output/berlin_establishments_url_map.png
 BACKUP_ROOT = backups
+OSM_CACHE = data/cache/osm
+WEB_CACHE = data/cache/web_scrape
+LLM_CACHE = data/cache/llm_parse
+CACHE_ROOT = data/cache
 
 OSM_PULL_SCRIPT = code/pull_osm_data.py
 WEB_SCRAPE_SCRIPT = code/scrape_web_for_legal_info.py
@@ -13,7 +17,7 @@ LLM_INSTRUCTIONS = code/llm_instructions.md
 SECRETS_ENV = secrets.env
 MAP_SCRIPT = code/render_establishments_map.py
 
-.PHONY: all map backup clean dist-clean
+.PHONY: all map backup clean dist-clean purge-osm-cache purge-web-cache purge-llm-cache
 
 all: $(LEGAL_INFO)
 
@@ -29,12 +33,21 @@ backup:
 
 clean:
 	rm -f $(MAP_PNG)
-
-dist-clean: clean
 	rm -f $(OSM_PLACES)
 	rm -f $(WEB_EVIDENCE)
 	rm -f $(LEGAL_INFO)
-	rm -rf data/cache
+
+dist-clean: clean
+	rm -rf $(CACHE_ROOT)
+
+purge-osm-cache:
+	rm -rf $(OSM_CACHE)
+
+purge-web-cache:
+	rm -rf $(WEB_CACHE)
+
+purge-llm-cache:
+	rm -rf $(LLM_CACHE)
 
 $(SECRETS_ENV):
 	@echo "Missing $(SECRETS_ENV). Create it in the project root before running the LLM extraction step."

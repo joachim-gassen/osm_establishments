@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import re
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -17,8 +16,6 @@ SECRETS_ENV = Path("secrets.env")
 INPUT_JSON = Path("data/pulled/legal_web_pages.json")
 OUTPUT_CSV = Path("data/generated/osm_establishments_legal_info.csv")
 CACHE_DIR = Path("data/cache/llm_parse")
-REPARSE_DATA = False
-TEARDOWN_CACHE_FOLDER = False
 INSTRUCTIONS_PATH = Path("code/llm_instructions.md")
 DEFAULT_MODEL = "openai/gpt-5.4-mini"
 FULL_TEXT_PAGE_ROLES = {"impressum", "imprint", "legal"}
@@ -87,16 +84,6 @@ def load_instructions(path: Path) -> str:
 
 def load_project_env() -> None:
     load_dotenv(SECRETS_ENV)
-
-
-def tear_down_cache_dir() -> None:
-    if CACHE_DIR.exists():
-        logger.info("Removing LLM extraction cache directory %s", CACHE_DIR)
-        shutil.rmtree(CACHE_DIR)
-
-    cache_parent = CACHE_DIR.parent
-    if cache_parent.exists() and not any(cache_parent.iterdir()):
-        cache_parent.rmdir()
 
 
 def parse_cache_path(result: dict[str, Any]) -> Path:
@@ -380,12 +367,6 @@ def run_parser(
     model: str,
     limit: int | None,
 ) -> None:
-    if output_csv.exists() and not REPARSE_DATA:
-        logger.info("Using existing LLM extraction output %s", output_csv)
-        if TEARDOWN_CACHE_FOLDER:
-            tear_down_cache_dir()
-        return
-
     instructions = load_instructions(instructions_path)
     results = json.loads(input_json.read_text(encoding="utf-8"))
     if limit is not None:
@@ -447,9 +428,6 @@ def run_parser(
 
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(flattened_rows).to_csv(output_csv, index=False)
-
-    if TEARDOWN_CACHE_FOLDER:
-        tear_down_cache_dir()
 
     logger.info("Wrote %s", output_csv)
 

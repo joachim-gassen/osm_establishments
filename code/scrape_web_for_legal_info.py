@@ -4,7 +4,6 @@ import argparse
 import json
 import logging
 import re
-import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,8 +23,6 @@ from selenium.webdriver.common.by import By
 INPUT_GEOJSON = Path("data/pulled/business_places.geojson")
 OUTPUT_JSON = Path("data/pulled/legal_web_pages.json")
 CACHE_DIR = Path("data/cache/web_scrape")
-RESCRAPE_DATA = False
-TEARDOWN_CACHE_FOLDER = False
 
 USER_AGENT = "osm-establishments-legal-scraper/0.1"
 REQUEST_TIMEOUT = 20
@@ -105,16 +102,6 @@ def create_browser() -> webdriver.Chrome:
     browser = webdriver.Chrome(options=options)
     browser.set_page_load_timeout(BROWSER_PAGE_LOAD_TIMEOUT)
     return browser
-
-
-def tear_down_cache_dir() -> None:
-    if CACHE_DIR.exists():
-        logger.info("Removing web scrape cache directory %s", CACHE_DIR)
-        shutil.rmtree(CACHE_DIR)
-
-    cache_parent = CACHE_DIR.parent
-    if cache_parent.exists() and not any(cache_parent.iterdir()):
-        cache_parent.rmdir()
 
 
 def scrape_cache_path(row: pd.Series) -> Path:
@@ -407,12 +394,6 @@ def load_establishments(input_geojson: Path) -> pd.DataFrame:
 
 
 def run_web_scrape(input_geojson: Path, output_json: Path, limit: int) -> None:
-    if output_json.exists() and not RESCRAPE_DATA:
-        logger.info("Using existing web scrape output %s", output_json)
-        if TEARDOWN_CACHE_FOLDER:
-            tear_down_cache_dir()
-        return
-
     df = load_establishments(input_geojson)
     websites = df[df["website"].notna() & (df["website"].str.strip() != "")]
     websites = websites.drop_duplicates(subset=["website"]).head(limit)
@@ -449,8 +430,6 @@ def run_web_scrape(input_geojson: Path, output_json: Path, limit: int) -> None:
             browser.quit()
 
     write_json(results, output_json)
-    if TEARDOWN_CACHE_FOLDER:
-        tear_down_cache_dir()
 
     logger.info("Wrote %s", output_json)
 

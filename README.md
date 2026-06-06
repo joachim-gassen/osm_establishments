@@ -1,6 +1,6 @@
 # Collect Legal Information for OpenStreetMap Establishments
 
-This repository showcases how to collect and process unstructured data. 
+This repository showcases how to collect and process unstructured data.
 Its pipeline starts with gathering OpenStreetMap establishments and ends with
 structured legal-entity information from the establishments' websites.
 
@@ -10,8 +10,22 @@ The central question is:
 > establishment, can we identify the legal entity responsible for that website?
 
 The pipeline is deliberately split into steps so each stage can be inspected and
-rerun without repeating all previous work. It also supports interrupted
-workflows by using caches.
+rerun without repeating all previous work. Cached step outputs make it possible
+to stop midway and resume later without starting from scratch.
+
+By default, the OSM pull uses a Berlin-Mitte bounding box:
+
+```text
+south=52.49, west=13.35, north=52.54, east=13.43
+```
+
+The web scraping step then keeps the run manageable by processing only the first
+25 establishments that have website URLs. The LLM extraction step works from
+that scraped evidence, so the final CSV also reflects those 25 URL-bearing
+establishments.
+
+To scale the project up, adjust `BBOX` in `code/pull_osm_data.py` and the
+`--limit` argument in `code/scrape_web_for_legal_info.py`.
 
 ![Pipeline overview](materials/pipeline.png)
 
@@ -32,26 +46,10 @@ data/generated/osm_establishments_legal_info.csv
 Intermediate pulled data lives in `data/pulled`. Restartable step caches live in
 `data/cache`.
 
-## Demonstration Scope
-
-This repository is configured as a small demonstration, not a full-scale OSM
-harvest.
-
-By default, the OSM pull uses a Berlin-Mitte bounding box:
-
-```text
-south=52.49, west=13.35, north=52.54, east=13.43
-```
-
-The web scraping step then keeps the run manageable by processing only the first
-25 establishments that have website URLs. The LLM extraction step works from
-that scraped evidence, so the final CSV also reflects those 25 URL-bearing
-establishments.
-
-To scale the project up, adjust `BBOX` in `code/pull_osm_data.py` and the
-`--limit` argument in `code/scrape_web_for_legal_info.py`.
-
 ## Setup
+
+Use either `pip` or `uv` to set up the repository. Both setup paths use
+`pyproject.toml` as the dependency list.
 
 ### pip
 
@@ -62,12 +60,6 @@ python -m pip install --upgrade pip
 python -m pip install -e .
 ```
 
-Then run the pipeline with:
-
-```sh
-make all
-```
-
 ### uv
 
 ```sh
@@ -76,15 +68,7 @@ source .venv/bin/activate
 uv sync
 ```
 
-Then run the pipeline with:
-
-```sh
-make all
-```
-
-Both setup paths use `pyproject.toml` as the single dependency list.
-
-### LLM credentials
+### LLM Credentials
 
 The LLM extraction step reads environment variables from `secrets.env` in the
 project root. Create this file before running `make all`:
@@ -101,40 +85,56 @@ LLM_MODEL=openai/gpt-5-mini
 
 `secrets.env` is ignored by Git and should not be committed.
 
-
 ## Make Targets
 
-Build the final legal-info CSV:
+After these configuration steps, you can build the output. To run all three
+steps and construct the final legal-info CSV:
 
 ```sh
 make all
 ```
 
-Build the map scatter plot featured below:
+To build the map scatter plot featured below based on the OSM data:
 
 ```sh
 make map
 ```
 
-Create a timestamped safety copy of the current data and output artifacts:
+You can create a timestamped safety copy of your current data and output
+artifacts, which is useful before running `make dist-clean` when you want to
+rerun the pipeline:
 
 ```sh
 make backup
 ```
 
 The backup is written to `backups/pipeline_outputs_<timestamp>/` and includes
-the `data` and `output` folders. This is useful before testing a clean rebuild.
+the `data` and `output` folders.
 
-Remove only the generated map PNG:
+Remove reproducible outputs while keeping caches:
 
 ```sh
 make clean
 ```
 
-Remove all reproducible data outputs and caches:
+This deletes the generated map, pulled JSON/GeoJSON outputs, and final CSV.
+It keeps `data/cache`, so the next run can rebuild outputs from cached step
+data where possible.
+
+Remove all reproducible outputs and all caches:
 
 ```sh
 make dist-clean
+```
+
+Purge only one cache layer. Please note that these will *not* delete the 
+respective data file. If you want to rebuild this, run `make clean` together
+with purging the cache files.
+
+```sh
+make purge-osm-cache
+make purge-web-cache
+make purge-llm-cache
 ```
 
 ## A Data Walkthrough
@@ -239,7 +239,7 @@ full captured text:
 }
 ```
 
-## Step 3: LLM Legal-Info Parse
+## Step 3: LLM Legal-Info Extraction
 
 Script:
 
@@ -253,7 +253,7 @@ Output:
 data/generated/osm_establishments_legal_info.csv
 ```
 
-The parser builds a curated evidence packet and asks the LLM to extract only
+The extractor builds a curated evidence packet and asks the LLM to extract only
 fields supported by the collected evidence. Per-OSM verbose JSON packets are
 cached in `data/cache/llm_parse`; those packets include the provided web data,
 the curated LLM input, and the LLM response.
@@ -268,25 +268,34 @@ The LLM instructions live in `code/llm_instructions.md`. They are intentionally
 conservative: fields should stay empty when the evidence does not clearly
 support them.
 
-## Reruns And Caches
+## Reruns and Caches
 
-Each pipeline script has a rerun constant near the top of the file:
+By default, `make all` uses file timestamps: if an output exists and is newer
+than its prerequisites, make does not rerun that step. To force a rebuild of
+outputs while preserving cache files, run:
 
-- `REPULL_DATA` in `code/pull_osm_data.py`
-- `RESCRAPE_DATA` in `code/scrape_web_for_legal_info.py`
-- `REPARSE_DATA` in `code/parse_legal_entities_llm.py`
+```sh
+make clean
+make all
+```
 
-By default, existing final artifacts are reused. Step caches are retained by
-default as audit and restart data. Set `TEARDOWN_CACHE_FOLDER = True` in a script
-if you want that script to remove its cache after a successful run.
+To force a rebuild from scratch, including fresh Overpass, Selenium, and LLM
+requests where needed, run:
 
-## Why The Pipeline Is Split
+```sh
+make dist-clean
+make all
+```
 
-The split allows to run the pipeline on large spatial areas with many 
-establishments. It also makes failures easier to diagnose:
+The cache folders are retained as audit and restart data:
 
-- If the final legal entity is wrong, first inspect the OSM website URL.
-- If the URL is right, inspect the rendered legal evidence in
-  `data/pulled/legal_web_pages.json`.
-- If the evidence is right, inspect the verbose LLM cache packet in
-  `data/cache/llm_parse`.
+- `data/cache/osm`
+- `data/cache/web_scrape`
+- `data/cache/llm_parse`
+
+Use `make purge-osm-cache`, `make purge-web-cache`, or `make purge-llm-cache` to
+remove only one cache layer.
+
+Because the code reuses cached data, you can stop processing at any point and
+continue later with the work already completed. This is useful for pipelines
+that rely on public resources or take a long time to run.
