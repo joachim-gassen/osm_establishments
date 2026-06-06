@@ -10,6 +10,7 @@ OSM_PULL_SCRIPT = code/pull_osm_data.py
 WEB_SCRAPE_SCRIPT = code/scrape_web_for_legal_info.py
 LLM_PARSE_SCRIPT = code/parse_legal_entities_llm.py
 LLM_INSTRUCTIONS = code/llm_instructions.md
+SECRETS_ENV = secrets.env
 MAP_SCRIPT = code/render_establishments_map.py
 
 .PHONY: all map backup clean dist-clean
@@ -35,13 +36,21 @@ dist-clean: clean
 	rm -f $(LEGAL_INFO)
 	rm -rf data/cache
 
+$(SECRETS_ENV):
+	@echo "Missing $(SECRETS_ENV). Create it in the project root before running the LLM extraction step."
+	@echo "Example:"
+	@echo "  OPENAI_API_KEY=your_api_key_here"
+	@echo "Optional:"
+	@echo "  LLM_MODEL=openai/gpt-5-mini"
+	@exit 1
+
 $(OSM_PLACES): $(OSM_PULL_SCRIPT)
 	$(PYTHON) $(OSM_PULL_SCRIPT)
 
 $(WEB_EVIDENCE): $(OSM_PLACES) $(WEB_SCRAPE_SCRIPT)
 	$(PYTHON) $(WEB_SCRAPE_SCRIPT) --input $(OSM_PLACES) --output-json $(WEB_EVIDENCE)
 
-$(LEGAL_INFO): $(WEB_EVIDENCE) $(LLM_PARSE_SCRIPT) $(LLM_INSTRUCTIONS)
+$(LEGAL_INFO): $(WEB_EVIDENCE) $(LLM_PARSE_SCRIPT) $(LLM_INSTRUCTIONS) $(SECRETS_ENV)
 	$(PYTHON) $(LLM_PARSE_SCRIPT) --input $(WEB_EVIDENCE) --output-csv $(LEGAL_INFO) --instructions $(LLM_INSTRUCTIONS)
 
 $(MAP_PNG): $(OSM_PLACES) $(MAP_SCRIPT)

@@ -1,4 +1,4 @@
-# Collect legal info for OpenStreetMap Establishments
+# Collect Legal Information for OpenStreetMap Establishments
 
 This repository showcases how to collect and process unstructured data. 
 Its pipeline starts with gathering OpenStreetMap establishments and ends with
@@ -83,6 +83,23 @@ make all
 ```
 
 Both setup paths use `pyproject.toml` as the single dependency list.
+
+### LLM credentials
+
+The LLM extraction step reads environment variables from `secrets.env` in the
+project root. Create this file before running `make all`:
+
+```sh
+OPENAI_API_KEY=your_api_key_here
+```
+
+You can also override the model there:
+
+```sh
+LLM_MODEL=openai/gpt-5-mini
+```
+
+`secrets.env` is ignored by Git and should not be committed.
 
 
 ## Make Targets
